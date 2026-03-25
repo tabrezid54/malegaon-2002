@@ -7,12 +7,76 @@
   <link href="https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;600&display=swap" rel="stylesheet">
 
   <style>
-    body { font-family: Arial; background:#f4f6f9; text-align:center; margin:0; }
-    h1 { color:#c7360a; }
-    #search { width:50%; padding:10px; font-size:16px; }
-    button { padding:10px; cursor:pointer; }
-    .result-card { background:white; width:60%; margin:10px auto; padding:10px; }
-    .hidden { display:none; }
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f6f9;
+      margin: 0;
+      text-align: center;
+    }
+
+    h1 { color: #c7360a; margin-top: 10px; }
+
+    #search {
+      width: 50%;
+      padding: 12px;
+      font-size: 18px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+    }
+
+    button {
+      padding: 12px 18px;
+      font-size: 16px;
+      cursor: pointer;
+      border-radius: 6px;
+      border: none;
+      background: #007bff;
+      color: white;
+    }
+
+    button:disabled {
+      background: #999;
+    }
+
+    .result-card {
+      background: white;
+      width: 55%;
+      margin: 12px auto;
+      padding: 14px;
+      text-align: left;
+      border-radius: 6px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      font-size: 16px;
+      line-height: 24px;
+    }
+
+    #loading {
+      margin: 20px;
+      font-size: 18px;
+    }
+
+    .hidden { display: none; }
+
+    #loginBox {
+      margin-top: 40px;
+      padding: 25px;
+      width: 350px;
+      background: white;
+      border-radius: 6px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+      margin-inline: auto;
+    }
+
+    #loginBox input {
+      width: 80%;
+      padding: 10px;
+      margin: 8px 0;
+    }
+
+    #loginError {
+      color: red;
+      margin-top: 6px;
+    }
   </style>
 </head>
 
@@ -22,129 +86,191 @@
 
 <!-- LOGIN -->
 <div id="loginBox">
-  <input id="username" placeholder="Username"><br>
-  <input id="password" type="password" placeholder="Password"><br>
+  <h3>Login</h3>
+  <input type="text" id="username" placeholder="Username"><br>
+  <input type="password" id="password" placeholder="Password"><br>
   <button onclick="doLogin()">Login</button>
-  <div id="loginError" style="color:red;"></div>
+  <div id="loginError"></div>
 </div>
 
-<!-- APP -->
-<div id="app" class="hidden">
-  <button onclick="logout()">Logout</button><br><br>
-  <input id="search" placeholder="Search..." disabled>
-  <button onclick="searchVoter()" id="searchBtn" disabled>Search</button>
+<!-- SEARCH AREA -->
+<div id="searchArea" class="hidden">
+  <button onclick="logout()" style="background:#c7360a;margin-top:10px;">Logout</button>
 
-  <div id="loading">Loading data...</div>
+  <div id="loading">Loading voter data...</div>
+
+  <input id="search" type="text" placeholder="Search voter..." disabled />
+  <button id="searchBtn" onclick="searchVoter()" disabled>Search</button>
+
   <div id="count"></div>
   <div id="results"></div>
 </div>
 
 <script>
-/* LOGIN */
-const USER="user52";
-const PASS="Islam@5252";
 
-if(sessionStorage.getItem("auth")) showApp();
+/* ---------------- LOGIN ---------------- */
+const USER = "shah";
+const PASS = "Devops123";
 
-function doLogin(){
-  if(
-    username.value===USER &&
-    password.value===PASS
-  ){
-    sessionStorage.setItem("auth","true");
+if (sessionStorage.getItem("auth") === "true") {
+  showApp();
+}
+
+function doLogin() {
+  const u = username.value.trim();
+  const p = password.value.trim();
+
+  if (u === USER && p === PASS) {
+    sessionStorage.setItem("auth", "true");
     showApp();
-  }else{
-    loginError.innerText="Invalid login";
+  } else {
+    loginError.innerText = "Invalid username or password";
   }
 }
 
-function showApp(){
+function showApp() {
   loginBox.classList.add("hidden");
-  app.classList.remove("hidden");
+  searchArea.classList.remove("hidden");
 }
 
-function logout(){
+function logout() {
   sessionStorage.clear();
   location.reload();
 }
 
-/* DATA LOAD (LOCAL FILES) */
-const dataFolder = "./data/";
-let voters=[];
-let filtered=[];
-let page=1;
-const perPage=50;
+/* ---------------- SEARCH LOGIC ---------------- */
 
-async function loadData(){
-  try{
-    const files = await fetch(dataFolder+"files.json").then(r=>r.json());
+const folder = "./data/";
+let voters = [];
+let filtered = [];
+let page = 1;
+const perPage = 50;
 
-    let total=0;
+async function loadData() {
+  try {
+    const listResponse = await fetch(folder + "files.json");
+    const fileList = await listResponse.json();
+    let total = 0;
 
-    for(const file of files){
-      const res = await fetch(dataFolder+file);
+    for (const file of fileList) {
+      const res = await fetch(folder + file);
       const data = await res.json();
       voters = voters.concat(data);
-
       total += data.length;
-      loading.innerText = "Loading... "+total+" records";
+
+      document.getElementById("loading").innerText =
+        `Loading… (${total} records loaded)`;
     }
 
-    loading.innerText="Loaded "+voters.length+" records";
-    search.disabled=false;
-    searchBtn.disabled=false;
+    document.getElementById("loading").style.display = "none";
+    document.getElementById("search").disabled = false;
+    document.getElementById("searchBtn").disabled = false;
 
-  }catch(e){
-    loading.innerText="Error loading data";
+  } catch (e) {
+    document.getElementById("loading").innerText = "Failed to load voter data.";
+    console.error(e);
   }
 }
+
 loadData();
 
-/* SEARCH */
-function searchVoter(){
-  const q = search.value.toLowerCase();
-  if(!q) return;
+/* ---------------- HINDI SEARCH ---------------- */
+async function englishToHindi(text) {
+  try {
+    const url =
+      "https://inputtools.google.com/request?itc=hi-t-i0-und&num=1&text=" +
+      encodeURIComponent(text);
 
-  filtered = voters.filter(v =>
-    JSON.stringify(v).toLowerCase().includes(q)
-  );
+    const res = await fetch(url);
+    const j = await res.json();
+    return j[1][0][1][0] || text;
 
-  page=1;
-  render();
+  } catch {
+    return text;
+  }
 }
 
-function render(){
-  const start=(page-1)*perPage;
-  const end=start+perPage;
+/* ---------------- FORMAT RESULT ---------------- */
+function formatJson(v) {
+  return `
+    <b>Serial No:</b> ${v.serial_no || "-"}<br/>
+    <b>Name:</b> ${v.name}<br/>
+    <b>Address:</b> ${v.address}<br/>
+    <b>Relation Type:</b> ${v.relation_type || "-"}<br/>
+    <b>Father/Husband Name:</b> ${v.father_husband_name || "-"}<br/>
+    <b>Gender:</b> ${v.gender || "-"}<br/>
+    <b>Age:</b> ${v.age || "-"}<br/>
+    <b>EPIC No:</b> ${v.epic_no || "-"}<br/>
+    <b>Yadi No:</b> ${v.yadi_no || "-"}<br/>
+    <b>Page No:</b> ${v.page_no || "-"}<br/>
+    <b>PDF File:</b> ${v.pdf_file || "-"}<br/>
+    <b>Source Line:</b> ${v.source || "-"}
+  `;
+}
 
-  count.innerText = `Showing ${start+1}-${Math.min(end,filtered.length)} of ${filtered.length}`;
+/* ---------------- PAGINATION ---------------- */
+function renderPage() {
+  const start = (page - 1) * perPage;
+  const end = start + perPage;
+  const display = filtered.slice(start, end);
 
-  results.innerHTML="";
+  document.getElementById("count").innerHTML =
+    `Showing ${start + 1}–${Math.min(end, filtered.length)} of ${filtered.length}`;
 
-  filtered.slice(start,end).forEach(v=>{
-    results.innerHTML += `
-      <div class="result-card">
-        <b>${v.name}</b><br/>
-        ${v.address}<br/>
-        Age: ${v.age || "-"}
-      </div>
-    `;
+  const container = document.getElementById("results");
+  container.innerHTML = "";
+
+  display.forEach(v => {
+    container.innerHTML += `<div class="result-card">${formatJson(v)}</div>`;
   });
 
-  let nav="";
-  if(page>1) nav+=`<button onclick="prev()">Prev</button>`;
-  if(end<filtered.length) nav+=`<button onclick="next()">Next</button>`;
+  let nav = `<div style="margin:20px;">`;
 
-  results.innerHTML += nav;
+  if (page > 1)
+    nav += `<button onclick="prevPage()">⬅ Previous</button> `;
+
+  if (end < filtered.length)
+    nav += `<button onclick="nextPage()">Next ➡</button>`;
+
+  nav += `</div>`;
+
+  container.innerHTML += nav;
 }
 
-function next(){ page++; render(); }
-function prev(){ page--; render(); }
+function nextPage() {
+  page++;
+  renderPage();
+}
 
-/* ENTER KEY */
-search.addEventListener("keypress", e=>{
-  if(e.key==="Enter") searchVoter();
+function prevPage() {
+  page--;
+  renderPage();
+}
+
+/* ---------------- SEARCH ---------------- */
+async function searchVoter() {
+  const query = document.getElementById("search").value.trim();
+  if (!query) return;
+
+  const hindiQuery = await englishToHindi(query.toLowerCase());
+
+  filtered = voters.filter(v => {
+    const full = JSON.stringify(v).toLowerCase();
+    return (
+      full.includes(query.toLowerCase()) ||
+      full.includes(hindiQuery.toLowerCase())
+    );
+  });
+
+  page = 1;
+  renderPage();
+}
+
+/* ENTER KEY SUPPORT */
+document.getElementById("search").addEventListener("keypress", e => {
+  if (e.key === "Enter") searchVoter();
 });
+
 </script>
 
 </body>
