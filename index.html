@@ -11,7 +11,7 @@
       font-family: Arial, sans-serif;
       background: #f4f6f9;
       margin: 0;
-      padding: 0;
+      padding: 10px;
       text-align: center;
       position: relative;
     }
@@ -60,15 +60,6 @@
 
     #loading { margin: 20px; font-size: 18px; }
 
-    .urdu-heading {
-      font-size: 32px;
-      font-weight: 600;
-      color: #000080;
-      direction: rtl;
-      margin-top: 10px;
-      font-family: 'Noto Nastaliq Urdu', serif;
-    }
-
     /* Developer text */
     .dev {
       position: absolute;
@@ -80,7 +71,7 @@
 
     /* Login */
     #loginBox {
-      margin-top: 40px;
+      margin-top: 20px;
       padding: 25px;
       width: 350px;
       background: white;
@@ -104,8 +95,6 @@
 <body>
 
 <div class="dev">Developed by Shah Tabrez</div>
-
-<div class="urdu-heading">ہمارا مقصد، آپ کی خدمت</div>
 
 <div class="note">
   <div class="note-line1">Not 100%, but always helpful.</div>
@@ -225,9 +214,15 @@ function formatJson(v) {
     <b>Serial No:</b> ${v.serial_no || "-"}<br/>
     <b>Name:</b> ${v.name}<br/>
     <b>Address:</b> ${v.address}<br/>
-    <b>Father/Husband:</b> ${v.father_husband_name || "-"}<br/>
+    <b>Relation Type:</b> ${v.relation_type || "-"}<br/>
+    <b>Father/Husband Name:</b> ${v.father_husband_name || "-"}<br/>
     <b>Gender:</b> ${v.gender || "-"}<br/>
     <b>Age:</b> ${v.age || "-"}<br/>
+    <b>EPIC No:</b> ${v.epic_no || "-"}<br/>
+    <b>Yadi No:</b> ${v.yadi_no || "-"}<br/>
+    <b>Page No:</b> ${v.page_no || "-"}<br/>
+    <b>PDF File:</b> ${v.pdf_file || "-"}<br/>
+    <b>Source Line:</b> ${v.source}
   `;
 }
 
