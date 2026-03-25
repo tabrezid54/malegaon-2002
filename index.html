@@ -3,153 +3,149 @@
 <head>
   <meta charset="UTF-8">
   <title>Malegaon Voter List Search (2002)</title>
+
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;600&display=swap" rel="stylesheet">
+
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #f4f6f9;
-      margin: 0;
-      padding: 0;
-      text-align: center;
-    }
-    h1 {
-      margin-top: 10px;
-      font-size: 28px;
-    }
-    .note {
-      margin-top: 20px;
-      margin-bottom: 10px;
-    }
-    .note-line1 {
-      font-size: 28px; /* same as h1 */
-      font-weight: bold;
-    }
-    .note-line2 {
-      font-size: 16px;
-      color: #555;
-      margin-top: 5px;
-      width: 60%;
-      margin-left: auto;
-      margin-right: auto;
-    }
-    #search {
-      width: 50%;
-      padding: 12px;
-      font-size: 18px;
-      border-radius: 6px;
-      border: 1px solid #ccc;
-      margin-right: 8px;
-    }
-    button {
-      padding: 12px 18px;
-      font-size: 18px;
-      cursor: pointer;
-      border: none;
-      border-radius: 6px;
-      background: #007bff;
-      color: white;
-    }
-    #count {
-      margin: 20px;
-      font-size: 20px;
-      color: #333;
-    }
-    .result-card {
-      background: white;
-      width: 55%;
-      margin: 12px auto;
-      padding: 14px;
-      text-align: left;
-      border-radius: 6px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-      font-size: 18px;
-      line-height: 26px;
-    }
+    body { font-family: Arial; background:#f4f6f9; text-align:center; margin:0; }
+    h1 { color:#c7360a; }
+    #search { width:50%; padding:10px; font-size:16px; }
+    button { padding:10px; cursor:pointer; }
+    .result-card { background:white; width:60%; margin:10px auto; padding:10px; }
+    .hidden { display:none; }
   </style>
 </head>
+
 <body>
 
-  <div class="note">
-    <div class="note-line1">Not 100%, but always helpful.</div>
-  </div>
+<h1>Malegaon Voter List Search (2002)</h1>
 
-  <h1>Malegaon Voter List Search (2002)</h1>
-  <div class="note">
-    <div class="note-line2">If your record does not appear in the search results, it may still exist in the 2002 Yadi. Kindly check manually.</div>
-  </div>
+<!-- LOGIN -->
+<div id="loginBox">
+  <input id="username" placeholder="Username"><br>
+  <input id="password" type="password" placeholder="Password"><br>
+  <button onclick="doLogin()">Login</button>
+  <div id="loginError" style="color:red;"></div>
+</div>
 
-  <input id="search" type="text" placeholder="Enter name / EPIC / area / serial etc." />
-  <button onclick="searchVoter()">Search</button>
+<!-- APP -->
+<div id="app" class="hidden">
+  <button onclick="logout()">Logout</button><br><br>
+  <input id="search" placeholder="Search..." disabled>
+  <button onclick="searchVoter()" id="searchBtn" disabled>Search</button>
 
+  <div id="loading">Loading data...</div>
   <div id="count"></div>
   <div id="results"></div>
+</div>
 
-  <script>
-    const bucket = "https://voter-list-2002.s3.amazonaws.com/malegaon/";
-    let voters = [];
+<script>
+/* LOGIN */
+const USER="user52";
+const PASS="Islam@5252";
 
-    async function loadData() {
-      try {
-        const res = await fetch(bucket + "malegaon.json");
-        voters = await res.json();
-        console.log("Loaded", voters.length, "records");
-      } catch (error) {
-        console.error("Error loading data:", error);
-      }
-    }
-    loadData();
+if(sessionStorage.getItem("auth")) showApp();
 
-    async function englishToHindi(text) {
-      try {
-        const url = "https://inputtools.google.com/request?itc=hi-t-i0-und&num=1&text=" + encodeURIComponent(text);
-        const res = await fetch(url);
-        const j = await res.json();
-        return j[1][0][1][0] || text;
-      } catch {
-        return text;
-      }
-    }
+function doLogin(){
+  if(
+    username.value===USER &&
+    password.value===PASS
+  ){
+    sessionStorage.setItem("auth","true");
+    showApp();
+  }else{
+    loginError.innerText="Invalid login";
+  }
+}
 
-    function formatJson(v) {
-      return `
-        <b>Serial No:</b> ${v.serial_no || "-"}<br/>
-        <b>Name:</b> ${v.name}<br/>
-        <b>Address:</b> ${v.address}<br/>
-        <b>Relation Type:</b> ${v.relation_type || "-"}<br/>
-        <b>Father/Husband Name:</b> ${v.father_husband_name || "-"}<br/>
-        <b>Gender:</b> ${v.gender || "-"}<br/>
-        <b>Age:</b> ${v.age || "-"}<br/>
-        <b>EPIC No:</b> ${v.epic_no || "-"}<br/>
-        <b>Yadi No:</b> ${v.yadi_no || "-"}<br/>
-        <b>Page No:</b> ${v.page_no || "-"}<br/>
-        <b>PDF File:</b> ${v.pdf_file || "-"}<br/>
-        <b>Source Line:</b> ${v.source}
-      `;
-    }
+function showApp(){
+  loginBox.classList.add("hidden");
+  app.classList.remove("hidden");
+}
 
-    async function searchVoter() {
-      const qRaw = document.getElementById("search").value.trim();
-      if (!qRaw) return;
+function logout(){
+  sessionStorage.clear();
+  location.reload();
+}
 
-      const hindiQuery = await englishToHindi(qRaw.toLowerCase());
+/* DATA LOAD (LOCAL FILES) */
+const dataFolder = "./data/";
+let voters=[];
+let filtered=[];
+let page=1;
+const perPage=50;
 
-      const results = voters.filter(v => {
-        const full = JSON.stringify(v).toLowerCase();
-        return full.includes(qRaw.toLowerCase()) || full.includes(hindiQuery.toLowerCase());
-      });
+async function loadData(){
+  try{
+    const files = await fetch(dataFolder+"files.json").then(r=>r.json());
 
-      document.getElementById("count").innerHTML = results.length + " results found";
-      const container = document.getElementById("results");
-      container.innerHTML = "";
+    let total=0;
 
-      results.forEach(v => {
-        container.innerHTML += `<div class="result-card">${formatJson(v)}</div>`;
-      });
+    for(const file of files){
+      const res = await fetch(dataFolder+file);
+      const data = await res.json();
+      voters = voters.concat(data);
+
+      total += data.length;
+      loading.innerText = "Loading... "+total+" records";
     }
 
-    document.getElementById("search").addEventListener("keypress", e => {
-      if (e.key === "Enter") searchVoter();
-    });
-  </script>
+    loading.innerText="Loaded "+voters.length+" records";
+    search.disabled=false;
+    searchBtn.disabled=false;
+
+  }catch(e){
+    loading.innerText="Error loading data";
+  }
+}
+loadData();
+
+/* SEARCH */
+function searchVoter(){
+  const q = search.value.toLowerCase();
+  if(!q) return;
+
+  filtered = voters.filter(v =>
+    JSON.stringify(v).toLowerCase().includes(q)
+  );
+
+  page=1;
+  render();
+}
+
+function render(){
+  const start=(page-1)*perPage;
+  const end=start+perPage;
+
+  count.innerText = `Showing ${start+1}-${Math.min(end,filtered.length)} of ${filtered.length}`;
+
+  results.innerHTML="";
+
+  filtered.slice(start,end).forEach(v=>{
+    results.innerHTML += `
+      <div class="result-card">
+        <b>${v.name}</b><br/>
+        ${v.address}<br/>
+        Age: ${v.age || "-"}
+      </div>
+    `;
+  });
+
+  let nav="";
+  if(page>1) nav+=`<button onclick="prev()">Prev</button>`;
+  if(end<filtered.length) nav+=`<button onclick="next()">Next</button>`;
+
+  results.innerHTML += nav;
+}
+
+function next(){ page++; render(); }
+function prev(){ page--; render(); }
+
+/* ENTER KEY */
+search.addEventListener("keypress", e=>{
+  if(e.key==="Enter") searchVoter();
+});
+</script>
+
 </body>
 </html>
-
