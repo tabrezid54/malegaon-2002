@@ -11,10 +11,18 @@
       font-family: Arial, sans-serif;
       background: #f4f6f9;
       margin: 0;
+      padding: 0;
       text-align: center;
+      position: relative;
     }
 
-    h1 { color: #c7360a; margin-top: 10px; }
+    h1 { margin-top: 10px; font-size: 28px; color: #c7360a; }
+
+    .note { margin-top: 10px; margin-bottom: 10px; }
+    .note-line1 { font-size: 24px; font-weight: bold; }
+    .note-line2 { font-size: 16px; color: #555; width: 60%; margin: auto; }
+
+    .source { margin-top: 4px; font-size: 15px; color: #007bff; }
 
     #search {
       width: 50%;
@@ -34,9 +42,9 @@
       color: white;
     }
 
-    button:disabled {
-      background: #999;
-    }
+    button:disabled { background: #999; }
+
+    #count { margin: 20px; font-size: 18px; }
 
     .result-card {
       background: white;
@@ -50,13 +58,27 @@
       line-height: 24px;
     }
 
-    #loading {
-      margin: 20px;
-      font-size: 18px;
+    #loading { margin: 20px; font-size: 18px; }
+
+    .urdu-heading {
+      font-size: 36px;
+      font-weight: 600;
+      color: #000080;
+      direction: rtl;
+      margin-top: 20px;
+      font-family: 'Noto Nastaliq Urdu', serif;
     }
 
-    .hidden { display: none; }
+    /* Developer text */
+    .dev {
+      position: absolute;
+      top: 5px;
+      right: 10px;
+      font-size: 10px;
+      color: #333;
+    }
 
+    /* Login */
     #loginBox {
       margin-top: 40px;
       padding: 25px;
@@ -73,16 +95,33 @@
       margin: 8px 0;
     }
 
-    #loginError {
-      color: red;
-      margin-top: 6px;
-    }
+    #loginError { color: red; }
+
+    .hidden { display: none; }
   </style>
 </head>
 
 <body>
 
+<div class="dev">Developed by Shah Tabrez</div>
+
+<div class="urdu-heading">ہمارا مقصد، آپ کی خدمت</div>
+
+<div class="note">
+  <div class="note-line1">Not 100%, but always helpful.</div>
+</div>
+
 <h1>Malegaon Voter List Search (2002)</h1>
+
+<div class="source">
+  Source: https://ceoelection.maharashtra.gov.in/2002/2002rolldata.aspx
+</div>
+
+<div class="note">
+  <div class="note-line2">
+    If your record does not appear in the search results, it may still exist in the 2002 Yadi. Kindly check manually.
+  </div>
+</div>
 
 <!-- LOGIN -->
 <div id="loginBox">
@@ -95,11 +134,11 @@
 
 <!-- SEARCH AREA -->
 <div id="searchArea" class="hidden">
-  <button onclick="logout()" style="background:#c7360a;margin-top:10px;">Logout</button>
+  <button onclick="logout()" style="background:#c7360a;">Logout</button>
 
   <div id="loading">Loading voter data...</div>
 
-  <input id="search" type="text" placeholder="Search voter..." disabled />
+  <input id="search" type="text" placeholder="Enter name / EPIC / area..." disabled />
   <button id="searchBtn" onclick="searchVoter()" disabled>Search</button>
 
   <div id="count"></div>
@@ -108,7 +147,7 @@
 
 <script>
 
-/* ---------------- LOGIN ---------------- */
+/* LOGIN */
 const USER = "shah";
 const PASS = "Devops123";
 
@@ -117,10 +156,7 @@ if (sessionStorage.getItem("auth") === "true") {
 }
 
 function doLogin() {
-  const u = username.value.trim();
-  const p = password.value.trim();
-
-  if (u === USER && p === PASS) {
+  if (username.value === USER && password.value === PASS) {
     sessionStorage.setItem("auth", "true");
     showApp();
   } else {
@@ -138,8 +174,7 @@ function logout() {
   location.reload();
 }
 
-/* ---------------- SEARCH LOGIC ---------------- */
-
+/* DATA */
 const folder = "./data/";
 let voters = [];
 let filtered = [];
@@ -148,126 +183,95 @@ const perPage = 50;
 
 async function loadData() {
   try {
-    const listResponse = await fetch(folder + "files.json");
-    const fileList = await listResponse.json();
+    const fileList = await fetch(folder + "files.json").then(r => r.json());
     let total = 0;
 
     for (const file of fileList) {
-      const res = await fetch(folder + file);
-      const data = await res.json();
+      const data = await fetch(folder + file).then(r => r.json());
       voters = voters.concat(data);
       total += data.length;
 
-      document.getElementById("loading").innerText =
-        `Loading… (${total} records loaded)`;
+      loading.innerText = `Loading… (${total} records loaded)`;
     }
 
-    document.getElementById("loading").style.display = "none";
-    document.getElementById("search").disabled = false;
-    document.getElementById("searchBtn").disabled = false;
+    loading.style.display = "none";
+    search.disabled = false;
+    searchBtn.disabled = false;
 
-  } catch (e) {
-    document.getElementById("loading").innerText = "Failed to load voter data.";
-    console.error(e);
+  } catch {
+    loading.innerText = "Failed to load data";
   }
 }
 
 loadData();
 
-/* ---------------- HINDI SEARCH ---------------- */
+/* Hindi Support */
 async function englishToHindi(text) {
   try {
-    const url =
+    const res = await fetch(
       "https://inputtools.google.com/request?itc=hi-t-i0-und&num=1&text=" +
-      encodeURIComponent(text);
-
-    const res = await fetch(url);
+      encodeURIComponent(text)
+    );
     const j = await res.json();
     return j[1][0][1][0] || text;
-
   } catch {
     return text;
   }
 }
 
-/* ---------------- FORMAT RESULT ---------------- */
+/* Format */
 function formatJson(v) {
   return `
     <b>Serial No:</b> ${v.serial_no || "-"}<br/>
     <b>Name:</b> ${v.name}<br/>
     <b>Address:</b> ${v.address}<br/>
-    <b>Relation Type:</b> ${v.relation_type || "-"}<br/>
-    <b>Father/Husband Name:</b> ${v.father_husband_name || "-"}<br/>
+    <b>Father/Husband:</b> ${v.father_husband_name || "-"}<br/>
     <b>Gender:</b> ${v.gender || "-"}<br/>
     <b>Age:</b> ${v.age || "-"}<br/>
-    <b>EPIC No:</b> ${v.epic_no || "-"}<br/>
-    <b>Yadi No:</b> ${v.yadi_no || "-"}<br/>
-    <b>Page No:</b> ${v.page_no || "-"}<br/>
-    <b>PDF File:</b> ${v.pdf_file || "-"}<br/>
-    <b>Source Line:</b> ${v.source || "-"}
   `;
 }
 
-/* ---------------- PAGINATION ---------------- */
+/* Pagination */
 function renderPage() {
   const start = (page - 1) * perPage;
   const end = start + perPage;
-  const display = filtered.slice(start, end);
 
-  document.getElementById("count").innerHTML =
-    `Showing ${start + 1}–${Math.min(end, filtered.length)} of ${filtered.length}`;
+  count.innerText =
+    `Showing ${start + 1}-${Math.min(end, filtered.length)} of ${filtered.length}`;
 
-  const container = document.getElementById("results");
-  container.innerHTML = "";
+  results.innerHTML = "";
 
-  display.forEach(v => {
-    container.innerHTML += `<div class="result-card">${formatJson(v)}</div>`;
+  filtered.slice(start, end).forEach(v => {
+    results.innerHTML += `<div class="result-card">${formatJson(v)}</div>`;
   });
 
-  let nav = `<div style="margin:20px;">`;
+  let nav = "";
+  if (page > 1) nav += `<button onclick="prevPage()">Prev</button>`;
+  if (end < filtered.length) nav += `<button onclick="nextPage()">Next</button>`;
 
-  if (page > 1)
-    nav += `<button onclick="prevPage()">⬅ Previous</button> `;
-
-  if (end < filtered.length)
-    nav += `<button onclick="nextPage()">Next ➡</button>`;
-
-  nav += `</div>`;
-
-  container.innerHTML += nav;
+  results.innerHTML += nav;
 }
 
-function nextPage() {
-  page++;
-  renderPage();
-}
+function nextPage() { page++; renderPage(); }
+function prevPage() { page--; renderPage(); }
 
-function prevPage() {
-  page--;
-  renderPage();
-}
-
-/* ---------------- SEARCH ---------------- */
+/* Search */
 async function searchVoter() {
-  const query = document.getElementById("search").value.trim();
-  if (!query) return;
+  const q = search.value.trim();
+  if (!q) return;
 
-  const hindiQuery = await englishToHindi(query.toLowerCase());
+  const hq = await englishToHindi(q.toLowerCase());
 
   filtered = voters.filter(v => {
     const full = JSON.stringify(v).toLowerCase();
-    return (
-      full.includes(query.toLowerCase()) ||
-      full.includes(hindiQuery.toLowerCase())
-    );
+    return full.includes(q.toLowerCase()) || full.includes(hq.toLowerCase());
   });
 
   page = 1;
   renderPage();
 }
 
-/* ENTER KEY SUPPORT */
-document.getElementById("search").addEventListener("keypress", e => {
+search.addEventListener("keypress", e => {
   if (e.key === "Enter") searchVoter();
 });
 
