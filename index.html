@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Malegaon Voter List Search (2002)</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f6f9;
+      margin: 0;
+      padding: 0;
+      text-align: center;
+    }
+    h1 {
+      margin-top: 10px;
+      font-size: 28px;
+    }
+    .note {
+      margin-top: 20px;
+      margin-bottom: 10px;
+    }
+    .note-line1 {
+      font-size: 28px; /* same as h1 */
+      font-weight: bold;
+    }
+    .note-line2 {
+      font-size: 16px;
+      color: #555;
+      margin-top: 5px;
+      width: 60%;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    #search {
+      width: 50%;
+      padding: 12px;
+      font-size: 18px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      margin-right: 8px;
+    }
+    button {
+      padding: 12px 18px;
+      font-size: 18px;
+      cursor: pointer;
+      border: none;
+      border-radius: 6px;
+      background: #007bff;
+      color: white;
+    }
+    #count {
+      margin: 20px;
+      font-size: 20px;
+      color: #333;
+    }
+    .result-card {
+      background: white;
+      width: 55%;
+      margin: 12px auto;
+      padding: 14px;
+      text-align: left;
+      border-radius: 6px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      font-size: 18px;
+      line-height: 26px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="note">
+    <div class="note-line1">Not 100%, but always helpful.</div>
+  </div>
+
+  <h1>Malegaon Voter List Search (2002)</h1>
+  <div class="note">
+    <div class="note-line2">If your record does not appear in the search results, it may still exist in the 2002 Yadi. Kindly check manually.</div>
+  </div>
+
+  <input id="search" type="text" placeholder="Enter name / EPIC / area / serial etc." />
+  <button onclick="searchVoter()">Search</button>
+
+  <div id="count"></div>
+  <div id="results"></div>
+
+  <script>
+    const bucket = "https://voter-list-2002.s3.amazonaws.com/malegaon/";
+    let voters = [];
+
+    async function loadData() {
+      try {
+        const res = await fetch(bucket + "malegaon.json");
+        voters = await res.json();
+        console.log("Loaded", voters.length, "records");
+      } catch (error) {
+        console.error("Error loading data:", error);
+      }
+    }
+    loadData();
+
+    async function englishToHindi(text) {
+      try {
+        const url = "https://inputtools.google.com/request?itc=hi-t-i0-und&num=1&text=" + encodeURIComponent(text);
+        const res = await fetch(url);
+        const j = await res.json();
+        return j[1][0][1][0] || text;
+      } catch {
+        return text;
+      }
+    }
+
+    function formatJson(v) {
+      return `
+        <b>Serial No:</b> ${v.serial_no || "-"}<br/>
+        <b>Name:</b> ${v.name}<br/>
+        <b>Address:</b> ${v.address}<br/>
+        <b>Relation Type:</b> ${v.relation_type || "-"}<br/>
+        <b>Father/Husband Name:</b> ${v.father_husband_name || "-"}<br/>
+        <b>Gender:</b> ${v.gender || "-"}<br/>
+        <b>Age:</b> ${v.age || "-"}<br/>
+        <b>EPIC No:</b> ${v.epic_no || "-"}<br/>
+        <b>Yadi No:</b> ${v.yadi_no || "-"}<br/>
+        <b>Page No:</b> ${v.page_no || "-"}<br/>
+        <b>PDF File:</b> ${v.pdf_file || "-"}<br/>
+        <b>Source Line:</b> ${v.source}
+      `;
+    }
+
+    async function searchVoter() {
+      const qRaw = document.getElementById("search").value.trim();
+      if (!qRaw) return;
+
+      const hindiQuery = await englishToHindi(qRaw.toLowerCase());
+
+      const results = voters.filter(v => {
+        const full = JSON.stringify(v).toLowerCase();
+        return full.includes(qRaw.toLowerCase()) || full.includes(hindiQuery.toLowerCase());
+      });
+
+      document.getElementById("count").innerHTML = results.length + " results found";
+      const container = document.getElementById("results");
+      container.innerHTML = "";
+
+      results.forEach(v => {
+        container.innerHTML += `<div class="result-card">${formatJson(v)}</div>`;
+      });
+    }
+
+    document.getElementById("search").addEventListener("keypress", e => {
+      if (e.key === "Enter") searchVoter();
+    });
+  </script>
+</body>
+</html>
+

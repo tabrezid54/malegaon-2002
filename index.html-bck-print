@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Malegaon Voter List Search (2002)</title>
+
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;600&display=swap" rel="stylesheet">
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f6f9;
+      margin: 0;
+      padding: 0;
+      text-align: center;
+      position: relative;
+    }
+    h1 { margin-top: 10px; font-size: 28px; color: #c7360a; }
+    .note { margin-top: 10px; margin-bottom: 10px; }
+    .note-line1 { font-size: 24px; font-weight: bold; }
+    .note-line2 { font-size: 16px; color: #555; margin-top: 5px; width: 60%; margin-inline: auto; }
+    .source { margin-top: 4px; font-size: 15px; color: #007bff; }
+    #search { width: 50%; padding: 12px; font-size: 18px; border-radius: 6px; border: 1px solid #ccc; }
+    button { padding: 12px 18px; font-size: 18px; cursor: pointer; border: none; border-radius: 6px; background: #007bff; color: white; }
+    button:disabled { background: #999; cursor: not-allowed; }
+    #count { margin: 20px; font-size: 20px; color: #333; }
+    .result-card { 
+      background: white; 
+      width: 55%; 
+      margin: 12px auto; 
+      padding: 14px; 
+      text-align: left; 
+      border-radius: 6px; 
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1); 
+      font-size: 18px; 
+      line-height: 26px; 
+      cursor: pointer; 
+      border-left: 6px solid #007bff;
+    }
+    .result-card:hover { background:#eef6ff; }
+
+    #loading { font-size: 18px; color: #555; margin: 20px; }
+    .top-left-img, .top-right-img { position: absolute; top: 10px; height: 150px; object-fit: contain; }
+    .top-left-img { left: 20px; }
+    .top-right-img { right: 20px; }
+    .urdu-heading { font-size: 36px; font-weight: 600; color: #000080; direction: rtl; text-align: center; margin-top: 22px; text-shadow: 2px 2px 6px rgba(0,0,0,0.25); font-family: 'Noto Nastaliq Urdu', serif; }
+
+    /* Login Box */
+    #loginBox {
+      margin-top: 40px;
+      padding: 25px;
+      width: 380px;
+      background: white;
+      border-radius: 6px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+      margin-inline: auto;
+    }
+    #loginBox input {
+      width: 80%;
+      padding: 10px;
+      margin: 8px 0;
+      font-size: 18px;
+    }
+    #loginError {
+      color: red;
+      margin-top: 6px;
+      font-size: 16px;
+    }
+    .hidden { display: none; }
+
+    /* Modal */
+    #pdfModal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.6);
+      display: none;
+      justify-content: center;
+      align-items: center;
+    }
+    #modalBox {
+      width: 80%;
+      height: 90%;
+      background: white;
+      border-radius: 10px;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    #modalIframe {
+      width: 100%;
+      height: 90%;
+      border: none;
+    }
+  </style>
+
+  <!-- pdf-lib -->
+  <script src="https://cdn.jsdelivr.net/npm/pdf-lib/dist/pdf-lib.min.js"></script>
+</head>
+<body>
+
+  <img src="https://voter-list-2002.s3.amazonaws.com/images/logo-left.png" class="top-left-img">
+  <img src="https://voter-list-2002.s3.amazonaws.com/images/logo-right.png" class="top-right-img">
+
+  <div class="urdu-heading">ہمارا مقصد، آپ کی خدمت</div>
+
+  <div class="note"><div class="note-line1">Not 100%, but always helpful.</div></div>
+
+  <h1>Malegaon Voter List Search (2002)</h1>
+  <div class="source">Source: https://ceoelection.maharashtra.gov.in/2002/2002rolldata.aspx</div>
+
+  <div class="note"><div class="note-line2">
+    If your record does not appear in the search results, it may still exist in the 2002 Yadi. Kindly check manually.
+  </div></div>
+
+  <div id="loginBox">
+    <h2>Login Required</h2>
+    <input type="text" id="username" placeholder="Username"><br>
+    <input type="password" id="password" placeholder="Password"><br>
+    <button onclick="doLogin()">Login</button>
+    <div id="loginError"></div>
+  </div>
+
+  <div id="searchArea" class="hidden">
+    <button onclick="logout()" style="margin-top: 15px; background:#c7360a">Logout</button>
+    <div id="loading">Loading voter data, please wait...</div>
+    <input id="search" type="text" placeholder="Enter name / EPIC / area / serial etc." disabled />
+    <button id="searchBtn" onclick="searchVoter()" disabled>Search</button>
+    <div id="count"></div>
+    <div id="results"></div>
+  </div>
+
+  <!-- Modal -->
+  <div id="pdfModal">
+    <div id="modalBox">
+      <button onclick="closeModal()" style="margin-bottom:10px;background:#c7360a;">Close</button>
+      <button id="printBtn" style="margin-bottom:10px;background:#007bff;">Print PDF</button>
+      <iframe id="modalIframe"></iframe>
+    </div>
+  </div>
+
+<script>
+/* ---------------- LOGIN ---------------- */
+const USER = "user52";
+const PASS = "Islam@5252";
+
+if(sessionStorage.getItem("auth")==="true"){
+  document.getElementById("loginBox").classList.add("hidden");
+  document.getElementById("searchArea").classList.remove("hidden");
+}
+
+function doLogin(){
+  const u=document.getElementById("username").value.trim();
+  const p=document.getElementById("password").value.trim();
+  if(u===USER && p===PASS){
+    sessionStorage.setItem("auth","true");
+    document.getElementById("loginBox").classList.add("hidden");
+    document.getElementById("searchArea").classList.remove("hidden");
+  }else{
+    document.getElementById("loginError").innerText="Invalid username or password";
+  }
+}
+
+function logout(){
+  sessionStorage.removeItem("auth");
+  location.reload();
+}
+
+/* ---------------- LOAD DATA ---------------- */
+const folder="https://voter-list-2002.s3.amazonaws.com/malegaon/";
+let voters=[];
+let filtered=[];
+let page=1;
+const perPage=50;
+
+async function loadData(){
+  const loadingEl=document.getElementById("loading");
+  try{
+    const listRes=await fetch(folder+"files.json");
+    const fileList=await listRes.json();
+    let total=0;
+
+    for(const file of fileList){
+      const res=await fetch(folder+file);
+      const data=await res.json();
+      voters=voters.concat(data);
+      total+=data.length;
+      loadingEl.innerText=`Loading… (${total} records loaded)`;
+    }
+
+    loadingEl.style.display="none";
+    document.getElementById("search").disabled=false;
+    document.getElementById("searchBtn").disabled=false;
+  }catch(err){
+    console.error(err);
+    loadingEl.innerText="Failed to load voter data!";
+  }
+}
+loadData();
+
+/* ---------------- ENGLISH TO HINDI ---------------- */
+async function englishToHindi(text){
+  try{
+    const url="https://inputtools.google.com/request?itc=hi-t-i0-und&num=1&text="+encodeURIComponent(text);
+    const res=await fetch(url);
+    const j=await res.json();
+    return j[1][0][1][0]||text;
+  }catch{
+    return text;
+  }
+}
+
+/* ---------------- FORMAT RECORD ---------------- */
+function formatJson(v){
+  return `
+    <b>Serial No:</b> ${v.serial_no||"-"}<br/>
+    <b>Name:</b> ${v.name}<br/>
+    <b>Address:</b> ${v.address}<br/>
+    <b>Relation Type:</b> ${v.relation_type||"-"}<br/>
+    <b>Father/Husband Name:</b> ${v.father_husband_name||"-"}<br/>
+    <b>Gender:</b> ${v.gender||"-"}<br/>
+    <b>Age:</b> ${v.age||"-"}<br/>
+    <b>EPIC No:</b> ${v.epic_no||"-"}<br/>
+    <b>Yadi No:</b> ${v.yadi_no||"-"}<br/>
+    <b>Page No:</b> ${v.page_no||"-"}<br/>
+    <b>PDF File:</b> ${v.pdf_file||"-"}<br/>
+    <b>Source Line:</b> ${v.source}
+  `;
+}
+
+/* ---------------- RENDER RESULTS ---------------- */
+function renderPage(){
+  const start=(page-1)*perPage;
+  const end=start+perPage;
+  const display=filtered.slice(start,end);
+
+  document.getElementById("count").innerHTML=`Showing ${start+1}–${Math.min(end,filtered.length)} of ${filtered.length} results`;
+
+  const container=document.getElementById("results");
+  container.innerHTML="";
+
+  display.forEach(v=>{
+    const card=document.createElement("div");
+    card.className="result-card";
+    card.innerHTML=formatJson(v);
+    card.addEventListener("click",()=>openPdf(v));
+    container.appendChild(card);
+  });
+
+  const nav=document.createElement("div");
+  nav.style.margin="20px";
+
+  if(page>1){
+    const prevBtn=document.createElement("button");
+    prevBtn.innerText="⬅ Previous";
+    prevBtn.onclick=prevPage;
+    nav.appendChild(prevBtn);
+  }
+  if(end<filtered.length){
+    const nextBtn=document.createElement("button");
+    nextBtn.innerText="Next ➡";
+    nextBtn.onclick=nextPage;
+    nav.appendChild(nextBtn);
+  }
+
+  container.appendChild(nav);
+}
+
+function nextPage(){page++;renderPage();}
+function prevPage(){page--;renderPage();}
+
+/* ---------------- SEARCH ---------------- */
+async function searchVoter(){
+  const query=document.getElementById("search").value.trim();
+  if(!query) return;
+
+  const hindiQuery=await englishToHindi(query.toLowerCase());
+
+  filtered=voters.filter(v=>{
+    const full=JSON.stringify(v).toLowerCase();
+    return full.includes(query.toLowerCase()) || full.includes(hindiQuery.toLowerCase());
+  });
+
+  page=1;
+  renderPage();
+}
+
+document.getElementById("search").addEventListener("keypress",e=>{
+  if(e.key==="Enter") searchVoter();
+});
+
+/* ---------------- PDF MODAL ---------------- */
+function closeModal(){
+  document.getElementById("pdfModal").style.display="none";
+  document.getElementById("modalIframe").src="";
+}
+
+async function openPdf(v){
+  if(!v.pdf_file || !v.page_no){
+    alert("PDF or Page number missing!");
+    return;
+  }
+
+  const pdfUrl=folder+"pdfs/"+v.pdf_file;
+
+  try{
+    const existingPdfBytes=await fetch(pdfUrl).then(r=>r.arrayBuffer());
+    const pdfDoc=await PDFLib.PDFDocument.load(existingPdfBytes);
+    const newPdf=await PDFLib.PDFDocument.create();
+
+    const totalPages=pdfDoc.getPageCount();
+    const recordPage=parseInt(v.page_no)-1;
+
+    if(recordPage<0 || recordPage>=totalPages){
+      alert("Invalid page number!");
+      return;
+    }
+
+    // Copy first page
+    const [page1]=await newPdf.copyPages(pdfDoc,[0]);
+    newPdf.addPage(page1);
+
+    // Copy page with record
+    if(recordPage!==0){
+      const [recordPg]=await newPdf.copyPages(pdfDoc,[recordPage]);
+      newPdf.addPage(recordPg);
+    }
+
+    const newPdfBytes=await newPdf.save();
+    const blob=new Blob([newPdfBytes],{type:"application/pdf"});
+    const blobUrl=URL.createObjectURL(blob);
+
+    document.getElementById("modalIframe").src=blobUrl;
+    document.getElementById("pdfModal").style.display="flex";
+
+    document.getElementById("printBtn").onclick=()=>{
+      const frame=document.getElementById("modalIframe").contentWindow;
+      frame.focus();
+      frame.print();
+    };
+
+  }catch(err){
+    console.error(err);
+    alert("Error loading PDF!");
+  }
+}
+</script>
+
+</body>
+</html>
+
