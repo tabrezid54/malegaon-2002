@@ -32,6 +32,12 @@
       border: 1px solid #ccc;
     }
 
+    select {
+      padding: 10px;
+      font-size: 16px;
+      border-radius: 6px;
+    }
+
     button {
       padding: 12px 18px;
       font-size: 16px;
@@ -60,7 +66,6 @@
 
     #loading { margin: 20px; font-size: 18px; }
 
-    /* Developer text */
     .dev {
       position: absolute;
       top: 5px;
@@ -69,7 +74,6 @@
       color: #333;
     }
 
-    /* Login */
     #loginBox {
       margin-top: 20px;
       padding: 25px;
@@ -87,7 +91,6 @@
     }
 
     #loginError { color: red; }
-
     .hidden { display: none; }
   </style>
 </head>
@@ -108,7 +111,7 @@
 
 <div class="note">
   <div class="note-line2">
-    If your record does not appear in the search results, it may still exist in the 2002 Yadi. Kindly check manually.
+    If your record does not appear in the search results, check manually.
   </div>
 </div>
 
@@ -127,8 +130,20 @@
 
   <div id="loading">Loading voter data...</div>
 
+  <br><br>
+
+  <!-- PDF FILTER -->
+  <select id="pdfFilter">
+    <option value="">All PDFs</option>
+  </select>
+
+  <br><br>
+
   <input id="search" type="text" placeholder="Enter name / EPIC / area..." disabled />
   <button id="searchBtn" onclick="searchVoter()" disabled>Search</button>
+
+  <br><br>
+  <button onclick="clearFilter()">Clear</button>
 
   <div id="count"></div>
   <div id="results"></div>
@@ -179,7 +194,6 @@ async function loadData() {
       const data = await fetch(folder + file).then(r => r.json());
       voters = voters.concat(data);
       total += data.length;
-
       loading.innerText = `Loading… (${total} records loaded)`;
     }
 
@@ -187,12 +201,29 @@ async function loadData() {
     search.disabled = false;
     searchBtn.disabled = false;
 
+    populatePDFDropdown();
+
   } catch {
     loading.innerText = "Failed to load data";
   }
 }
 
 loadData();
+
+/* Populate dropdown */
+function populatePDFDropdown() {
+  const dropdown = document.getElementById("pdfFilter");
+  const uniquePDFs = [...new Set(voters.map(v => v.pdf_file).filter(Boolean))];
+
+  uniquePDFs.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+
+  uniquePDFs.forEach(pdf => {
+    const opt = document.createElement("option");
+    opt.value = pdf;
+    opt.textContent = pdf;
+    dropdown.appendChild(opt);
+  });
+}
 
 /* Hindi Support */
 async function englishToHindi(text) {
@@ -214,15 +245,11 @@ function formatJson(v) {
     <b>Serial No:</b> ${v.serial_no || "-"}<br/>
     <b>Name:</b> ${v.name}<br/>
     <b>Address:</b> ${v.address}<br/>
-    <b>Relation Type:</b> ${v.relation_type || "-"}<br/>
-    <b>Father/Husband Name:</b> ${v.father_husband_name || "-"}<br/>
+    <b>Father/Husband:</b> ${v.father_husband_name || "-"}<br/>
     <b>Gender:</b> ${v.gender || "-"}<br/>
     <b>Age:</b> ${v.age || "-"}<br/>
     <b>EPIC No:</b> ${v.epic_no || "-"}<br/>
-    <b>Yadi No:</b> ${v.yadi_no || "-"}<br/>
-    <b>Page No:</b> ${v.page_no || "-"}<br/>
-    <b>PDF File:</b> ${v.pdf_file || "-"}<br/>
-    <b>Source Line:</b> ${v.source}
+    <b>PDF:</b> ${v.pdf_file || "-"}
   `;
 }
 
@@ -253,17 +280,35 @@ function prevPage() { page--; renderPage(); }
 /* Search */
 async function searchVoter() {
   const q = search.value.trim();
-  if (!q) return;
+  const selectedPDF = pdfFilter.value;
+
+  if (!q && !selectedPDF) return;
 
   const hq = await englishToHindi(q.toLowerCase());
 
   filtered = voters.filter(v => {
     const full = JSON.stringify(v).toLowerCase();
-    return full.includes(q.toLowerCase()) || full.includes(hq.toLowerCase());
+
+    const matchText =
+      full.includes(q.toLowerCase()) ||
+      full.includes(hq.toLowerCase());
+
+    const matchPDF =
+      !selectedPDF || v.pdf_file === selectedPDF;
+
+    return matchText && matchPDF;
   });
 
   page = 1;
   renderPage();
+}
+
+/* Clear */
+function clearFilter() {
+  pdfFilter.value = "";
+  search.value = "";
+  results.innerHTML = "";
+  count.innerText = "";
 }
 
 search.addEventListener("keypress", e => {
