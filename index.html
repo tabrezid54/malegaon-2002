@@ -6,6 +6,9 @@
 
   <link href="https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;600&display=swap" rel="stylesheet">
 
+  <!-- ✅ ADDED PDF LIB -->
+  <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
+
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -62,6 +65,14 @@
       box-shadow: 0 2px 4px rgba(0,0,0,0.1);
       font-size: 16px;
       line-height: 24px;
+
+      /* ✅ ADDED */
+      cursor: pointer;
+      transition: 0.2s;
+    }
+
+    .result-card:hover {
+      background: #eef5ff;
     }
 
     #loading { margin: 20px; font-size: 18px; }
@@ -180,6 +191,7 @@ function logout() {
 
 /* DATA */
 const folder = "./data/";
+const pdfFolder = "./pdfs/"; /* ✅ ADDED */
 let voters = [];
 let filtered = [];
 let page = 1;
@@ -209,6 +221,38 @@ async function loadData() {
 }
 
 loadData();
+
+/* ✅ PDF DOWNLOAD FUNCTION */
+async function downloadPDF(v) {
+  try {
+    const url = pdfFolder + v.pdf_file;
+
+    const existingPdfBytes = await fetch(url).then(res => res.arrayBuffer());
+
+    const pdfDoc = await PDFLib.PDFDocument.load(existingPdfBytes);
+    const newPdf = await PDFLib.PDFDocument.create();
+
+    const pagesToCopy = [0]; // first page always
+
+    const targetPage = (v.page_no || 1) - 1;
+    if (targetPage !== 0) pagesToCopy.push(targetPage);
+
+    const copiedPages = await newPdf.copyPages(pdfDoc, pagesToCopy);
+
+    copiedPages.forEach(p => newPdf.addPage(p));
+
+    const pdfBytes = await newPdf.save();
+
+    const blob = new Blob([pdfBytes], { type: "application/pdf" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = (v.name || "voter") + ".pdf";
+    link.click();
+
+  } catch (e) {
+    alert("Error generating PDF");
+  }
+}
 
 /* Populate dropdown */
 function populatePDFDropdown() {
@@ -268,7 +312,8 @@ function renderPage() {
   results.innerHTML = "";
 
   filtered.slice(start, end).forEach(v => {
-    results.innerHTML += `<div class="result-card">${formatJson(v)}</div>`;
+    /* ✅ MODIFIED ONLY THIS LINE */
+    results.innerHTML += `<div class="result-card" onclick='downloadPDF(${JSON.stringify(v)})'>${formatJson(v)}</div>`;
   });
 
   let nav = "";
