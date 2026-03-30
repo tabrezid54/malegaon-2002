@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Malegaon Voter List Search (2002)</title>
+
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;600&display=swap" rel="stylesheet">
+
+  <!-- ✅ ADDED PDF LIB -->
+  <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f6f9;
+      margin: 0;
+      padding: 10px;
+      text-align: center;
+      position: relative;
+    }
+
+    h1 { margin-top: 6px; font-size: 24px; color: #c7360a; }
+
+    .note { margin-top: 8px; margin-bottom: 10px; }
+    .note-line1 { font-size: 22px; font-weight: bold; }
+    .note-line2 { font-size: 16px; color: #555; width: 60%; margin: auto; }
+
+    .source { margin-top: 4px; font-size: 15px; color: #007bff; }
+
+    #search {
+      width: 50%;
+      padding: 12px;
+      font-size: 18px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+    }
+
+    select {
+      padding: 10px;
+      font-size: 16px;
+      border-radius: 6px;
+    }
+
+    button {
+      padding: 12px 18px;
+      font-size: 16px;
+      cursor: pointer;
+      border-radius: 6px;
+      border: none;
+      background: #007bff;
+      color: white;
+    }
+
+    button:disabled { background: #999; }
+
+    #count { margin: 20px; font-size: 18px; }
+
+    .result-card {
+      background: white;
+      width: 55%;
+      margin: 12px auto;
+      padding: 14px;
+      text-align: left;
+      border-radius: 6px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      font-size: 16px;
+      line-height: 24px;
+
+      /* ✅ ADDED */
+      cursor: pointer;
+      transition: 0.2s;
+    }
+
+    .result-card:hover {
+      background: #eef5ff;
+    }
+
+    #loading { margin: 20px; font-size: 18px; }
+
+    .dev {
+      position: absolute;
+      top: 5px;
+      right: 10px;
+      font-size: 10px;
+      color: #333;
+    }
+
+    #loginBox {
+      margin-top: 20px;
+      padding: 25px;
+      width: 350px;
+      background: white;
+      border-radius: 6px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+      margin-inline: auto;
+    }
+
+    #loginBox input {
+      width: 80%;
+      padding: 10px;
+      margin: 8px 0;
+    }
+
+    #loginError { color: red; }
+    .hidden { display: none; }
+  </style>
+</head>
+
+<body>
+
+<div class="dev">Developed by Shah Tabrez</div>
+
+<div class="note">
+  <div class="note-line1">Not 100%, but always helpful.</div>
+</div>
+
+<h1>Malegaon Voter List Search (2002)</h1>
+
+<div class="source">
+  Source: https://ceoelection.maharashtra.gov.in/2002/2002rolldata.aspx
+</div>
+
+<div class="note">
+  <div class="note-line2">
+    If your record does not appear in the search results, check manually.
+  </div>
+</div>
+
+<!-- LOGIN -->
+<div id="loginBox">
+  <h3>Login</h3>
+  <input type="text" id="username" placeholder="Username"><br>
+  <input type="password" id="password" placeholder="Password"><br>
+  <button onclick="doLogin()">Login</button>
+  <div id="loginError"></div>
+</div>
+
+<!-- SEARCH AREA -->
+<div id="searchArea" class="hidden">
+  <button onclick="logout()" style="background:#c7360a;">Logout</button>
+
+  <div id="loading">Loading voter data...</div>
+
+  <br><br>
+
+  <!-- PDF FILTER -->
+  <select id="pdfFilter">
+    <option value="">All PDFs</option>
+  </select>
+
+  <br><br>
+
+  <input id="search" type="text" placeholder="Enter name / EPIC / area..." disabled />
+  <button id="searchBtn" onclick="searchVoter()" disabled>Search</button>
+
+  <br><br>
+  <button onclick="clearFilter()">Clear</button>
+
+  <div id="count"></div>
+  <div id="results"></div>
+</div>
+
+<script>
+
+/* LOGIN */
+const USER = "shah";
+const PASS = "Devops123";
+
+if (sessionStorage.getItem("auth") === "true") {
+  showApp();
+}
+
+function doLogin() {
+  if (username.value === USER && password.value === PASS) {
+    sessionStorage.setItem("auth", "true");
+    showApp();
+  } else {
+    loginError.innerText = "Invalid username or password";
+  }
+}
+
+function showApp() {
+  loginBox.classList.add("hidden");
+  searchArea.classList.remove("hidden");
+}
+
+function logout() {
+  sessionStorage.clear();
+  location.reload();
+}
+
+/* DATA */
+const folder = "./data/";
+const pdfFolder = "./pdfs/"; /* ✅ ADDED */
+let voters = [];
+let filtered = [];
+let page = 1;
+const perPage = 50;
+
+async function loadData() {
+  try {
+    const fileList = await fetch(folder + "files.json").then(r => r.json());
+    let total = 0;
+
+    for (const file of fileList) {
+      const data = await fetch(folder + file).then(r => r.json());
+      voters = voters.concat(data);
+      total += data.length;
+      loading.innerText = `Loading… (${total} records loaded)`;
+    }
+
+    loading.style.display = "none";
+    search.disabled = false;
+    searchBtn.disabled = false;
+
+    populatePDFDropdown();
+
+  } catch {
+    loading.innerText = "Failed to load data";
+  }
+}
+
+loadData();
+
+/* ✅ PDF DOWNLOAD FUNCTION */
+async function downloadPDF(v) {
+  try {
+    const url = pdfFolder + v.pdf_file;
+
+    const existingPdfBytes = await fetch(url).then(res => res.arrayBuffer());
+
+    const pdfDoc = await PDFLib.PDFDocument.load(existingPdfBytes);
+    const newPdf = await PDFLib.PDFDocument.create();
+
+    const pagesToCopy = [0]; // first page always
+
+    const targetPage = (v.page_no || 1) - 1;
+    if (targetPage !== 0) pagesToCopy.push(targetPage);
+
+    const copiedPages = await newPdf.copyPages(pdfDoc, pagesToCopy);
+
+    copiedPages.forEach(p => newPdf.addPage(p));
+
+    const pdfBytes = await newPdf.save();
+
+    const blob = new Blob([pdfBytes], { type: "application/pdf" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = (v.name || "voter") + ".pdf";
+    link.click();
+
+  } catch (e) {
+    alert("Error generating PDF");
+  }
+}
+
+/* Populate dropdown */
+function populatePDFDropdown() {
+  const dropdown = document.getElementById("pdfFilter");
+  const uniquePDFs = [...new Set(voters.map(v => v.pdf_file).filter(Boolean))];
+
+  uniquePDFs.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+
+  uniquePDFs.forEach(pdf => {
+    const opt = document.createElement("option");
+    opt.value = pdf;
+    opt.textContent = pdf;
+    dropdown.appendChild(opt);
+  });
+}
+
+/* Hindi Support */
+async function englishToHindi(text) {
+  try {
+    const res = await fetch(
+      "https://inputtools.google.com/request?itc=hi-t-i0-und&num=1&text=" +
+      encodeURIComponent(text)
+    );
+    const j = await res.json();
+    return j[1][0][1][0] || text;
+  } catch {
+    return text;
+  }
+}
+
+/* Format */
+function formatJson(v) {
+  return `
+    <b>Serial No:</b> ${v.serial_no || "-"}<br/>
+    <b>Name:</b> ${v.name}<br/>
+    <b>Address:</b> ${v.address}<br/>
+    <b>Relation Type:</b> ${v.relation_type || "-"}<br/>
+    <b>Father/Husband Name:</b> ${v.father_husband_name || "-"}<br/>
+    <b>Gender:</b> ${v.gender || "-"}<br/>
+    <b>Age:</b> ${v.age || "-"}<br/>
+    <b>EPIC No:</b> ${v.epic_no || "-"}<br/>
+    <b>Yadi No:</b> ${v.yadi_no || "-"}<br/>
+    <b>Page No:</b> ${v.page_no || "-"}<br/>
+    <b>PDF File:</b> ${v.pdf_file || "-"}<br/>
+    <b>Source Line:</b> ${v.source}
+  `;
+}
+
+/* Pagination */
+function renderPage() {
+  const start = (page - 1) * perPage;
+  const end = start + perPage;
+
+  count.innerText =
+    `Showing ${start + 1}-${Math.min(end, filtered.length)} of ${filtered.length}`;
+
+  results.innerHTML = "";
+
+  filtered.slice(start, end).forEach(v => {
+    /* ✅ MODIFIED ONLY THIS LINE */
+    results.innerHTML += `<div class="result-card" onclick='downloadPDF(${JSON.stringify(v)})'>${formatJson(v)}</div>`;
+  });
+
+  let nav = "";
+  if (page > 1) nav += `<button onclick="prevPage()">Prev</button>`;
+  if (end < filtered.length) nav += `<button onclick="nextPage()">Next</button>`;
+
+  results.innerHTML += nav;
+}
+
+function nextPage() { page++; renderPage(); }
+function prevPage() { page--; renderPage(); }
+
+/* Search */
+async function searchVoter() {
+  const q = search.value.trim();
+  const selectedPDF = pdfFilter.value;
+
+  if (!q && !selectedPDF) return;
+
+  const hq = await englishToHindi(q.toLowerCase());
+
+  filtered = voters.filter(v => {
+    const full = JSON.stringify(v).toLowerCase();
+
+    const matchText =
+      full.includes(q.toLowerCase()) ||
+      full.includes(hq.toLowerCase());
+
+    const matchPDF =
+      !selectedPDF || v.pdf_file === selectedPDF;
+
+    return matchText && matchPDF;
+  });
+
+  page = 1;
+  renderPage();
+}
+
+/* Clear */
+function clearFilter() {
+  pdfFilter.value = "";
+  search.value = "";
+  results.innerHTML = "";
+  count.innerText = "";
+}
+
+search.addEventListener("keypress", e => {
+  if (e.key === "Enter") searchVoter();
+});
+
+</script>
+
+</body>
+</html>
